@@ -28,7 +28,7 @@ pub async fn process_group_photo(handler: Arc<Handler>, job: faktory::Job) -> Re
         );
     }
 
-    match GroupConfig::get(&handler.conn, message.chat.id, GroupConfigKey::GroupAdd).await? {
+    match GroupConfig::get(&handler.conn, &message.chat, GroupConfigKey::GroupAdd).await? {
         Some(true) => tracing::debug!("group wants automatic sources"),
         _ => {
             tracing::trace!("group sourcing disabled, skipping message");
@@ -76,12 +76,7 @@ pub async fn process_group_photo(handler: Arc<Handler>, job: faktory::Job) -> Re
     )
     .await?
     .1;
-    sort_results(
-        &handler.conn,
-        message.from.as_ref().unwrap().id,
-        &mut matches,
-    )
-    .await?;
+    sort_results(&handler.conn, message.from.as_ref().unwrap(), &mut matches).await?;
 
     let wanted_matches = matches
         .iter()
@@ -262,9 +257,9 @@ pub async fn process_group_source(handler: Arc<Handler>, job: faktory::Job) -> R
 /// Check if group is linked to a channel.
 #[tracing::instrument(skip(handler, message))]
 async fn store_linked_chat(handler: &Handler, message: &tgbotapi::Message) -> anyhow::Result<()> {
-    if GroupConfig::get::<Option<i64>>(
+    if GroupConfig::get::<Option<i64>, _>(
         &handler.conn,
-        message.chat.id,
+        &message.chat,
         GroupConfigKey::HasLinkedChat,
     )
     .await
@@ -292,7 +287,7 @@ async fn store_linked_chat(handler: &Handler, message: &tgbotapi::Message) -> an
     GroupConfig::set(
         &handler.conn,
         GroupConfigKey::HasLinkedChat,
-        message.chat.id,
+        &message.chat,
         chat.linked_chat_id,
     )
     .await
@@ -318,9 +313,9 @@ async fn is_controlled_channel(
 
     tracing::Span::current().record("forward_from_chat_id", &forward_from_chat.id);
 
-    let can_edit = match GroupConfig::get::<bool>(
+    let can_edit = match GroupConfig::get::<bool, _>(
         &handler.conn,
-        forward_from_chat.id,
+        foxbot_models::Chat::Telegram(forward_from_chat.id),
         GroupConfigKey::CanEditChannel,
     )
     .await?

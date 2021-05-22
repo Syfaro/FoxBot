@@ -95,6 +95,17 @@ build:background-worker:
         - $RUSTC_WRAPPER --show-stats
         - mv ./target/release/foxbot-background-worker ./foxbot-background-worker/foxbot-background-worker
 
+build:discord:
+    <<: *base_build
+    artifacts:
+        expire_in: 1 day
+        paths:
+            - ./foxbot-discord/foxbot-discord
+    script:
+        - cargo build --verbose --release --bin foxbot-discord
+        - $RUSTC_WRAPPER --show-stats
+        - mv ./target/release/foxbot-discord ./foxbot-discord/foxbot-discord
+
 misc:base:
     stage: misc
     image: docker
@@ -128,13 +139,22 @@ image:background-worker:
         - docker push $CI_REGISTRY_IMAGE/background-worker:$CI_COMMIT_SHA
         - docker push $CI_REGISTRY_IMAGE/background-worker:latest
 
+image:discord:
+    <<: *base_images
+    needs: ['build:discord', 'misc:base']
+    script:
+        - docker pull $CI_REGISTRY_IMAGE/discord:latest || true
+        - docker build --build-arg http_proxy=$DEBIAN_PROXY --cache-from $CI_REGISTRY_IMAGE/discord:latest --tag $CI_REGISTRY_IMAGE/discord:$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE/discord:latest -f foxbot-discord/Dockerfile .
+        - docker push $CI_REGISTRY_IMAGE/discord:$CI_COMMIT_SHA
+        - docker push $CI_REGISTRY_IMAGE/discord:latest
+
 deploy:
     image: debian:buster-slim
     when: manual
     stage: deploy
     only:
         - main
-    needs: ['image:bot', 'image:background-worker']
+    needs: ['image:bot', 'image:background-worker', 'image:discord']
     resource_group: production
     before_script:
         - export http_proxy=$DEBIAN_PROXY
